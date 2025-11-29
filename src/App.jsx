@@ -884,9 +884,10 @@ function App() {
         {/* INTRO BANNER */}
         <section className="intro-banner">
           <p>
-            Private beta. This simulator compares a conventional
-            interest based system with an Islamic asset backed and
-            zakat based system. Parameters are stylised in one mode
+            Beta Mode. This simulator compares a conventional
+            interest based system, which is predominant in the UK, with an Islamic asset backed and
+            zakat based system. 
+          Parameters are stylised in one mode
             and loosely calibrated to UK averages in another. It is
             educational, not investment advice or a forecast.
           </p>
