@@ -17,3 +17,17 @@ publicDir = "dist"
 [[ports]]
 localPort = 5173
 externalPort = 80
+
+[agent]
+expertMode = true
+
+[workflows]
+
+[[workflows.workflow]]
+name = "Folder"
+mode = "sequential"
+author = 50188987
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run build"
