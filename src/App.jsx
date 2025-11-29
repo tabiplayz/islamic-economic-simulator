@@ -145,6 +145,39 @@ const SME_PRESETS = [
   },
 ];
 
+const SME_SECTORS = {
+  services: {
+    label: "Services",
+    baseMargin: 0.18,
+    revenueVolatility: 0.12,
+    recessionShock: -0.35,
+  },
+  retail: {
+    label: "Retail",
+    baseMargin: 0.10,
+    revenueVolatility: 0.18,
+    recessionShock: -0.45,
+  },
+  manufacturing: {
+    label: "Manufacturing",
+    baseMargin: 0.15,
+    revenueVolatility: 0.20,
+    recessionShock: -0.5,
+  },
+  food: {
+    label: "Food & hospitality",
+    baseMargin: 0.12,
+    revenueVolatility: 0.22,
+    recessionShock: -0.55,
+  },
+  tech: {
+    label: "Tech / creative",
+    baseMargin: 0.22,
+    revenueVolatility: 0.25,
+    recessionShock: -0.4,
+  },
+};
+
 const SCENARIOS = {
   baseline: {
     id: "baseline",
@@ -163,6 +196,34 @@ const SCENARIOS = {
     extraGDPShock: -3,
     inflationShock: 1,
   },
+};
+
+const BANK_SCENARIOS = {
+  normal: {
+    id: "normal",
+    label: "Normal",
+    pdMultiplierInterest: 1,
+    pdMultiplierIslamic: 1,
+  },
+  stress: {
+    id: "stress",
+    label: "Stress",
+    pdMultiplierInterest: 1.5,
+    pdMultiplierIslamic: 1.3,
+  },
+  severe: {
+    id: "severe",
+    label: "Severe",
+    pdMultiplierInterest: 2.5,
+    pdMultiplierIslamic: 2.0,
+  },
+};
+
+const SOCIAL_ELASTICITIES = {
+  povertyPerWealthPoint: 0.4,
+  crimePerWealthPoint: 0.25,
+  consumptionPerWealthPoint: 0.3,
+  gdpPerWealthPoint: 0.15,
 };
 
 function clamp(num, min, max) {
@@ -204,7 +265,9 @@ function calculateHouseholdMetrics({
     calibration?.housing?.termYearsDefault ||
     25;
   const income =
-    Number(salary) || calibration?.housing?.medianGrossIncome || 45000;
+    Number(salary) ||
+    calibration?.housing?.medianGrossIncome ||
+    45000;
 
   const principal = Math.max(P - D, 0);
   if (!P || !years || !income || principal <= 0) {
@@ -219,8 +282,7 @@ function calculateHouseholdMetrics({
   }
 
   const N = years * 12;
-  const houseGrowth =
-    calibration?.housing?.housePriceGrowth ?? 0.02;
+  const houseGrowth = calibration?.housing?.housePriceGrowth ?? 0.02;
 
   const baseRate =
     (interestRatePercent || 0) / 100 ||
@@ -398,16 +460,13 @@ function calculateSmeMetrics({
   termYears,
   calibration,
   scenario,
+  sectorConfig,
 }) {
   const R = Number(revenue) || 0;
-  const marginBase =
-    (Number(marginPercent) || 0) / 100 ||
-    calibration?.sme?.marginDefault ||
-    0.15;
   const F = Number(financeRequired) || 0;
   const years = Number(termYears) || 5;
 
-  if (!R || !marginBase || !F || !years) {
+  if (!R || !F || !years) {
     return {
       survivalInterest: 0,
       survivalIslamic: 0,
@@ -419,13 +478,25 @@ function calculateSmeMetrics({
     };
   }
 
+  const marginBase =
+    (Number(marginPercent) || 0) / 100 ||
+    sectorConfig?.baseMargin ||
+    calibration?.sme?.marginDefault ||
+    0.15;
+
   const baseProfit = R * marginBase;
   const severeThreshold = 0.4 * baseProfit;
 
   const cal = {
     loanRate: calibration?.sme?.loanRate ?? 0.07,
-    recessionShock: calibration?.sme?.recessionShock ?? -0.35,
-    revenueVolatility: calibration?.sme?.revenueVolatility ?? 0.12,
+    recessionShock:
+      sectorConfig?.recessionShock ??
+      calibration?.sme?.recessionShock ??
+      -0.35,
+    revenueVolatility:
+      sectorConfig?.revenueVolatility ??
+      calibration?.sme?.revenueVolatility ??
+      0.12,
     smeGrowth: calibration?.macro?.gdpGrowth ?? 0.02,
   };
 
@@ -562,17 +633,18 @@ function simulateNationalSystem(system, calibration, sme, scenario) {
 
     const growthGap = g - baseG * 100;
     unemp = clamp(
-      unemp - 0.15 * (growthGap / 1.0) + (scenario.id === "severe" && (t === 10 || t === 11) ? 0.8 : 0),
+      unemp -
+        0.15 * (growthGap / 1.0) +
+        (scenario.id === "severe" && (t === 10 || t === 11) ? 0.8 : 0),
       3,
       16
     );
     unemploymentSeries.push(unemp);
 
     const basePolicy = 4;
-    const riskSpread =
-      isInterest
-        ? 0.02 * Math.max(0, debt - 100) / 100
-        : 0.012 * Math.max(0, debt - 80) / 100;
+    const riskSpread = isInterest
+      ? 0.02 * Math.max(0, debt - 100) / 100
+      : 0.012 * Math.max(0, debt - 80) / 100;
     const crisisPremium =
       scenario.id === "severe" && (t === 10 || t === 11) ? 0.5 : 0;
     const borrowingCost =
@@ -607,7 +679,8 @@ function simulateNationalSystem(system, calibration, sme, scenario) {
   let piStability = clamp(
     100 -
       4 *
-        (piStd / (calibration.macro.inflationVolatility * 100 || 1.3)),
+        (piStd /
+          (calibration.macro.inflationVolatility * 100 || 1.3)),
     0,
     100
   );
@@ -667,10 +740,9 @@ function simulateAllNational(calibration, sme, scenario) {
   return { interest, islamic };
 }
 
-/* ============= ZAKAT AND INEQUALITY ============= */
+/* ============= WEALTH, ZAKAT & SOCIAL ============= */
 
 function simulateWealthDistribution(calibration, system, zakatPolicy) {
-  // Quintiles: initial shares sum to ~1 (bottom 20 to top 20)
   let shares = [0.06, 0.1, 0.16, 0.24, 0.44];
   const years = 30;
 
@@ -698,8 +770,7 @@ function simulateWealthDistribution(calibration, system, zakatPolicy) {
 
     if (system === "islamic" && zakatBaseRate > 0) {
       const base = calibration.macro.householdDebtIncome;
-      const nisabMultiplier =
-        base && base > 1.1 ? 1 : 0.9;
+      const nisabMultiplier = base && base > 1.1 ? 1 : 0.9;
       const zakatable = wealth.map((w, i) =>
         i >= 2 ? w * nisabMultiplier : 0
       );
@@ -753,6 +824,139 @@ function simulateWealthDistribution(calibration, system, zakatPolicy) {
   };
 }
 
+function computeHousingSupport(wealthIslamic, calibration) {
+  if (!wealthIslamic) {
+    return {
+      housingFund: 0,
+      householdsSaved: 0,
+      shareSaved: 0,
+      defaultReduction: 0,
+    };
+  }
+
+  const MUSLIM_WEALTH = 200_000_000_000; // £200bn stylised
+  const HOUSING_SHARE = 0.35;
+  const AVG_ARREARS = 5000;
+  const AT_RISK = 50_000;
+
+  const annualZakat =
+    MUSLIM_WEALTH * (wealthIslamic.zakatShareYear / 100);
+  const housingFund = annualZakat * HOUSING_SHARE;
+  const householdsSaved = housingFund / AVG_ARREARS;
+  const shareSaved = Math.min(householdsSaved / AT_RISK, 1);
+
+  const baselineDefaultRateAnnual =
+    (calibration?.housing?.annualDefaultProb ?? 0.006) * 100;
+  const defaultReduction =
+    baselineDefaultRateAnnual * shareSaved;
+
+  return {
+    housingFund,
+    householdsSaved,
+    shareSaved,
+    defaultReduction,
+  };
+}
+
+/* ============= BANK BALANCE SHEET SIM ============= */
+
+function simulateBankSystem(system, inputs) {
+  const {
+    totalAssets,
+    murabahaPct,
+    musharakahPct,
+    sukukPct,
+    cashPct,
+    mudarabahPct,
+    currentPct,
+    equityPct,
+    scenarioKey,
+  } = inputs;
+
+  const scenario = BANK_SCENARIOS[scenarioKey] || BANK_SCENARIOS.normal;
+  const A = totalAssets || 0;
+  if (!A) {
+    return {
+      capitalRatio: 0,
+      liquidityRatio: 0,
+      lossRatio: 0,
+      lossCoverRatio: 0,
+      shortfallProb: 0,
+    };
+  }
+
+  const assetTotalPct =
+    murabahaPct + musharakahPct + sukukPct + cashPct || 1;
+  const murabahaShare = murabahaPct / assetTotalPct;
+  const musharakahShare = musharakahPct / assetTotalPct;
+  const sukukShare = sukukPct / assetTotalPct;
+  const cashShare = cashPct / assetTotalPct;
+
+  const fundTotalPct =
+    mudarabahPct + currentPct + equityPct || 1;
+  const equityShare = equityPct / fundTotalPct;
+
+  const murabaha = A * murabahaShare;
+  const musharakah = A * musharakahShare;
+  const sukuk = A * sukukShare;
+  const cash = A * cashShare;
+
+  const rwa =
+    murabaha * 0.75 +
+    musharakah * 1.0 +
+    sukuk * 0.2 +
+    cash * 0.0;
+
+  const equity = A * equityShare;
+  const capitalRatio = rwa > 0 ? equity / rwa : 0;
+
+  const hqla = sukuk + cash;
+  const liquidityRatio = hqla / A;
+
+  const basePdFactor =
+    system === "interest"
+      ? scenario.pdMultiplierInterest
+      : scenario.pdMultiplierIslamic;
+
+  let basePdMurabaha = system === "interest" ? 0.03 : 0.02;
+  let basePdMusharakah = system === "interest" ? 0.06 : 0.05;
+  let basePdSukuk = system === "interest" ? 0.007 : 0.005;
+
+  const pdMurabaha = basePdMurabaha * basePdFactor;
+  const pdMusharakah = basePdMusharakah * basePdFactor;
+  const pdSukuk = basePdSukuk * basePdFactor;
+
+  const lgd = 0.4;
+
+  const lossMurabaha = murabaha * pdMurabaha * lgd;
+  const lossMusharakah = musharakah * pdMusharakah * lgd;
+  const lossSukuk = sukuk * pdSukuk * lgd;
+
+  const totalLoss = lossMurabaha + lossMusharakah + lossSukuk;
+  const lossRatio = totalLoss / A;
+
+  const lossCoverRatio = totalLoss > 0 ? equity / totalLoss : 999;
+
+  const shortfallProbRaw =
+    totalLoss <= 0
+      ? 0
+      : clamp(1 / (lossCoverRatio + 0.1), 0, 1);
+  const shortfallProb =
+    scenarioKey === "severe"
+      ? shortfallProbRaw * 1.4
+      : scenarioKey === "stress"
+      ? shortfallProbRaw * 1.1
+      : shortfallProbRaw;
+
+  return {
+    capitalRatio,
+    liquidityRatio,
+    lossRatio,
+    lossCoverRatio,
+    shortfallProb: clamp(shortfallProb * 100, 0, 100),
+  };
+}
+
 /* ============= UI ============= */
 
 function App() {
@@ -760,10 +964,12 @@ function App() {
   const [mode, setMode] = useState("uk");
   const [scenarioId, setScenarioId] = useState("baseline");
   const [zakatPolicy, setZakatPolicy] = useState("standard");
+  const [sector, setSector] = useState("services");
 
   const calibration = CALIBRATION_MODES[mode];
   const scenario = SCENARIOS[scenarioId];
 
+  // Household state
   const [salary, setSalary] = useState(55000);
   const [deposit, setDeposit] = useState(55000);
   const [propertyValue, setPropertyValue] = useState(270000);
@@ -779,6 +985,7 @@ function App() {
   const [activeHousePreset, setActiveHousePreset] =
     useState("avg_buyer");
 
+  // SME state
   const [revenue, setRevenue] = useState(250000);
   const [marginPercent, setMarginPercent] = useState(
     CALIBRATION_MODES.uk.sme.marginDefault * 100
@@ -787,6 +994,19 @@ function App() {
   const [smeTermYears, setSmeTermYears] = useState(5);
   const [activeSmePreset, setActiveSmePreset] =
     useState("service_sme");
+
+  // Bank state
+  const [bankAssets, setBankAssets] = useState(5000); // in millions
+  const [bankMurabaha, setBankMurabaha] = useState(40);
+  const [bankMusharakah, setBankMusharakah] = useState(30);
+  const [bankSukuk, setBankSukuk] = useState(20);
+  const [bankCash, setBankCash] = useState(10);
+
+  const [bankMudarabah, setBankMudarabah] = useState(60);
+  const [bankCurrent, setBankCurrent] = useState(20);
+  const [bankEquity, setBankEquity] = useState(20);
+
+  const [bankScenario, setBankScenario] = useState("normal");
 
   const household = useMemo(
     () =>
@@ -810,6 +1030,8 @@ function App() {
     ]
   );
 
+  const sectorConfig = SME_SECTORS[sector];
+
   const sme = useMemo(
     () =>
       calculateSmeMetrics({
@@ -819,8 +1041,17 @@ function App() {
         termYears: smeTermYears,
         calibration,
         scenario,
+        sectorConfig,
       }),
-    [revenue, marginPercent, financeRequired, smeTermYears, calibration, scenario]
+    [
+      revenue,
+      marginPercent,
+      financeRequired,
+      smeTermYears,
+      calibration,
+      scenario,
+      sectorConfig,
+    ]
   );
 
   const nationalAll = useMemo(
@@ -833,16 +1064,86 @@ function App() {
       : nationalAll.islamic.metrics;
 
   const wealthInterest = useMemo(
-    () => simulateWealthDistribution(calibration, "interest", zakatPolicy),
+    () =>
+      simulateWealthDistribution(
+        calibration,
+        "interest",
+        zakatPolicy
+      ),
     [calibration, zakatPolicy]
   );
   const wealthIslamic = useMemo(
-    () => simulateWealthDistribution(calibration, "islamic", zakatPolicy),
+    () =>
+      simulateWealthDistribution(
+        calibration,
+        "islamic",
+        zakatPolicy
+      ),
     [calibration, zakatPolicy]
   );
 
-  const moneyFmt = new Intl.NumberFormat("en-GB", {
+  const housingSupport = useMemo(
+    () => computeHousingSupport(wealthIslamic, calibration),
+    [wealthIslamic, calibration]
+  );
+
+  const bankInterest = useMemo(
+    () =>
+      simulateBankSystem("interest", {
+        totalAssets: bankAssets * 1_000_000,
+        murabahaPct: bankMurabaha,
+        musharakahPct: bankMusharakah,
+        sukukPct: bankSukuk,
+        cashPct: bankCash,
+        mudarabahPct: bankMudarabah,
+        currentPct: bankCurrent,
+        equityPct: bankEquity,
+        scenarioKey: bankScenario,
+      }),
+    [
+      bankAssets,
+      bankMurabaha,
+      bankMusharakah,
+      bankSukuk,
+      bankCash,
+      bankMudarabah,
+      bankCurrent,
+      bankEquity,
+      bankScenario,
+    ]
+  );
+
+  const bankIslamic = useMemo(
+    () =>
+      simulateBankSystem("islamic", {
+        totalAssets: bankAssets * 1_000_000,
+        murabahaPct: bankMurabaha,
+        musharakahPct: bankMusharakah,
+        sukukPct: bankSukuk,
+        cashPct: bankCash,
+        mudarabahPct: bankMudarabah,
+        currentPct: bankCurrent,
+        equityPct: bankEquity,
+        scenarioKey: bankScenario,
+      }),
+    [
+      bankAssets,
+      bankMurabaha,
+      bankMusharakah,
+      bankSukuk,
+      bankCash,
+      bankMudarabah,
+      bankCurrent,
+      bankEquity,
+      bankScenario,
+    ]
+  );
+
+  const moneyFmt0 = new Intl.NumberFormat("en-GB", {
     maximumFractionDigits: 0,
+  });
+  const moneyFmt1 = new Intl.NumberFormat("en-GB", {
+    maximumFractionDigits: 1,
   });
   const pct1 = (x) => x.toFixed(1);
 
@@ -884,12 +1185,11 @@ function App() {
         {/* INTRO BANNER */}
         <section className="intro-banner">
           <p>
-            Beta Mode. This simulator compares a conventional
-            interest based system, which is predominant in the UK, with an Islamic asset backed and
-            zakat based system. 
-          Parameters are stylised in one mode
-            and loosely calibrated to UK averages in another. It is
-            educational, not investment advice or a forecast.
+            Private beta. This simulator compares a conventional interest based
+            system with an Islamic asset backed and zakat based system.
+            Parameters are stylised in one mode and loosely calibrated to UK
+            averages in another. It is educational, not investment advice or a
+            forecast.
           </p>
         </section>
 
@@ -897,9 +1197,9 @@ function App() {
         <section className="section hero">
           <h1>The world&apos;s first Islamic Economic Simulator</h1>
           <p>
-            See how a nation, a household and a small business behave
-            when you replace debt and compounding with shared risk,
-            real assets and zakat.
+            See how a nation, a household, an SME and a bank behave when you
+            replace debt and compounding with shared risk, real assets and
+            zakat.
           </p>
 
           <div className="top-row">
@@ -925,9 +1225,7 @@ function App() {
                   <button
                     key={key}
                     className={
-                      mode === key
-                        ? "mode-btn active"
-                        : "mode-btn"
+                      mode === key ? "mode-btn active" : "mode-btn"
                     }
                     onClick={() => setMode(key)}
                   >
@@ -939,7 +1237,7 @@ function App() {
 
             <div className="scenario-box">
               <label>
-                <span>Scenario</span>
+                <span>Macro scenario</span>
                 <select
                   value={scenarioId}
                   onChange={(e) =>
@@ -1111,14 +1409,14 @@ function App() {
               <div className="card-row">
                 <MetricCard
                   label="Total paid interest"
-                  value={moneyFmt.format(
+                  value={moneyFmt0.format(
                     household.totalPaidInterest
                   )}
                   prefix="£"
                 />
                 <MetricCard
                   label="Total paid Islamic"
-                  value={moneyFmt.format(
+                  value={moneyFmt0.format(
                     household.totalPaidIslamic
                   )}
                   prefix="£"
@@ -1153,8 +1451,25 @@ function App() {
         <section className="section">
           <SectionHeader
             title="SME scenario"
-            subtitle="Monte Carlo simulation of a small business under debt versus profit share finance calibrated to UK SME survival and loan rates."
+            subtitle="Monte Carlo simulation of a small business under debt versus profit share finance, with sector specific risk profiles."
           />
+
+          <div className="preset-row">
+            <span className="preset-label">Sector:</span>
+            {Object.entries(SME_SECTORS).map(([key, cfg]) => (
+              <button
+                key={key}
+                className={
+                  sector === key
+                    ? "preset-btn active"
+                    : "preset-btn"
+                }
+                onClick={() => setSector(key)}
+              >
+                {cfg.label}
+              </button>
+            ))}
+          </div>
 
           <div className="preset-row">
             <span className="preset-label">Scenario:</span>
@@ -1218,9 +1533,10 @@ function App() {
                 }}
               />
               <p className="hint">
-                Monte Carlo runs: {sme.runs} simulated paths per
-                system using UK like survival and insolvency
-                targets in UK mode.
+                Sector:{" "}
+                <strong>{SME_SECTORS[sector].label}</strong> · Monte
+                Carlo runs: {sme.runs} paths per system using UK-like
+                survival targets in UK mode.
               </p>
             </div>
             <div className="col">
@@ -1251,6 +1567,104 @@ function App() {
                 />
               </div>
               <SmeChart curve={sme.incomeCurve} />
+            </div>
+          </div>
+        </section>
+
+        {/* BANK BALANCE SHEET */}
+        <section className="section">
+          <SectionHeader
+            title="Bank balance sheet stress test"
+            subtitle="Stylised Islamic vs conventional bank under different stress scenarios."
+          />
+          <div className="preset-row">
+            <span className="preset-label">Bank scenario:</span>
+            {Object.values(BANK_SCENARIOS).map((s) => (
+              <button
+                key={s.id}
+                className={
+                  bankScenario === s.id
+                    ? "preset-btn active"
+                    : "preset-btn"
+                }
+                onClick={() => setBankScenario(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="two-col">
+            <div className="col">
+              <InputField
+                label="Total assets (£m)"
+                value={bankAssets}
+                onChange={(v) => setBankAssets(v)}
+              />
+              <p className="hint small">
+                Asset mix (% of total assets)
+              </p>
+              <div className="two-col">
+                <div className="col">
+                  <InputField
+                    label="Murabaha / loans %"
+                    value={bankMurabaha}
+                    onChange={(v) => setBankMurabaha(v)}
+                  />
+                  <InputField
+                    label="Musharakah %"
+                    value={bankMusharakah}
+                    onChange={(v) => setBankMusharakah(v)}
+                  />
+                </div>
+                <div className="col">
+                  <InputField
+                    label="Sukuk %"
+                    value={bankSukuk}
+                    onChange={(v) => setBankSukuk(v)}
+                  />
+                  <InputField
+                    label="Cash %"
+                    value={bankCash}
+                    onChange={(v) => setBankCash(v)}
+                  />
+                </div>
+              </div>
+              <p className="hint small">
+                Funding mix (% of total funding)
+              </p>
+              <div className="two-col">
+                <div className="col">
+                  <InputField
+                    label="Mudarabah deposits %"
+                    value={bankMudarabah}
+                    onChange={(v) => setBankMudarabah(v)}
+                  />
+                </div>
+                <div className="col">
+                  <InputField
+                    label="Current accounts %"
+                    value={bankCurrent}
+                    onChange={(v) => setBankCurrent(v)}
+                  />
+                  <InputField
+                    label="Equity %"
+                    value={bankEquity}
+                    onChange={(v) => setBankEquity(v)}
+                  />
+                </div>
+              </div>
+              <p className="hint small">
+                Shares are normalised inside the model; they do not
+                need to sum exactly to 100%.
+              </p>
+            </div>
+
+            <div className="col">
+              <BankComparisonTable
+                interest={bankInterest}
+                islamic={bankIslamic}
+              />
             </div>
           </div>
         </section>
@@ -1317,14 +1731,21 @@ function App() {
               islamic={wealthIslamic.zakatShareAvg}
               unit="% of wealth"
             />
+            <WealthCard
+              title="Households saved from repossession"
+              interest={0}
+              islamic={housingSupport.householdsSaved}
+              unit="households/yr"
+            />
           </div>
           <p className="hint small">
-            Wealth distribution is stylised and not calibrated to
-            UK ONS wealth survey data yet. It shows direction of
-            travel when zakat and partnership based finance reduce
-            extreme concentration. Zakat flows are expressed as
-            approximate percentage of total wealth redistributed
-            each year in this simple model.
+            Wealth distribution is stylised and not calibrated to UK
+            ONS wealth survey data yet. It shows direction of travel
+            when zakat and partnership based finance reduce extreme
+            concentration. Zakat flows are expressed as approximate
+            percentage of total wealth redistributed each year. A
+            share is assumed to support housing arrears and prevent
+            repossession in the housing module.
           </p>
         </section>
 
@@ -1337,6 +1758,7 @@ function App() {
             nationalIslamic={nationalAll.islamic.metrics}
             wealthInterest={wealthInterest}
             wealthIslamic={wealthIslamic}
+            housingSupport={housingSupport}
             modeLabel={CALIBRATION_MODES[mode].label}
             scenarioLabel={SCENARIOS[scenarioId].label}
           />
@@ -1348,12 +1770,13 @@ function App() {
           <p className="text">
             This simulator is a comparative model. It combines
             explicit formulas for mortgages, diminishing musharakah,
-            SME cash flows, unemployment and national aggregates with
-            Monte Carlo simulations. In stylised mode parameters are
-            smooth and educational. In UK calibrated mode parameters
-            are set near typical UK averages for interest rates,
-            house price growth, SME survival and macro volatility
-            based on publicly reported figures.
+            SME cash flows, bank balance sheets, unemployment and
+            national aggregates with Monte Carlo simulations. In
+            stylised mode parameters are smooth and educational. In
+            UK calibrated mode parameters are set near typical UK
+            averages for interest rates, house price growth, SME
+            survival and macro volatility based on publicly reported
+            figures.
           </p>
 
           <div className="methods-grid">
@@ -1366,7 +1789,7 @@ function App() {
                 </li>
                 <li>
                   Islamic housing uses a simplified diminishing
-                  musharakah, with co ownership and falling rent on
+                  musharakah, with co-ownership and falling rent on
                   the bank share. Rent is charged on the bank share
                   times a rental yield.
                 </li>
@@ -1401,9 +1824,10 @@ function App() {
                 </li>
                 <li>
                   Survival, insolvency and severe income shocks come
-                  from 350 Monte Carlo paths for each system. UK mode
+                  from Monte Carlo paths for each system. UK mode
                   targets 5 year survival that matches the 40 percent
-                  range reported for UK cohorts.
+                  range reported for UK cohorts, with sector
+                  specific risk profiles.
                 </li>
               </ul>
             </div>
@@ -1444,6 +1868,23 @@ function App() {
           </div>
 
           <div className="methods-card wide">
+            <h3>Bank balance sheet</h3>
+            <p className="text small">
+              The bank module tracks a stylised balance sheet with
+              murabaha, musharakah, sukuk and cash on the asset side
+              and mudarabah deposits, current accounts and equity on
+              the liability side. Risk weights approximate Basel
+              logic and default probabilities differ for interest and
+              Islamic structures. Under stress scenarios expected
+              losses are compared to equity to derive capital ratios,
+              liquidity coverage and shortfall probabilities. The
+              model is illustrative rather than a full regulatory
+              framework, but it mirrors how supervisors think about
+              solvency and liquidity.
+            </p>
+          </div>
+
+          <div className="methods-card wide">
             <h3>Wealth, zakat and social effects</h3>
             <p className="text small">
               The wealth module tracks a stylised distribution of
@@ -1453,11 +1894,13 @@ function App() {
               redistributed to the bottom two. The model reports
               approximate zakat flows as a share of wealth, the
               resulting change in top and bottom wealth shares and an
-              inequality score. The summary panel then uses simple
-              elasticities to show indicative effects on poverty,
-              crime and consumption. These links are illustrative
-              rather than econometrically estimated and should be
-              treated as conceptual not definitive.
+              inequality score. A share of zakat is directed to
+              housing arrears to prevent repossession; this reduces
+              effective default rates. Simple elasticities are then
+              used to show indicative effects on poverty, crime,
+              consumption and long run GDP. These links are
+              illustrative rather than econometrically estimated and
+              should be treated as conceptual, not definitive.
             </p>
           </div>
 
@@ -1492,7 +1935,7 @@ function App() {
             backing and zakat. The aim is to show that Islamic
             finance is not only a religious preference but a
             different economic physics that can reduce fragility for
-            households, SMEs and the macroeconomy.
+            households, SMEs, banks and the macroeconomy.
           </p>
         </section>
 
@@ -1505,12 +1948,11 @@ function App() {
               GDP, inflation, wealth and SME behaviour.
             </li>
             <li>
-              Islamic bank balance sheet stress testing and liquidity
-              runs.
+              Deeper bank liquidity and interbank market modelling.
             </li>
             <li>
               Sector specific SME modules for retail, services and
-              manufacturing.
+              manufacturing with richer data.
             </li>
             <li>
               Exportable PDF reports for policy makers and Shariah
@@ -1540,7 +1982,9 @@ function MetricCard({ label, value, suffix, prefix, valueText }) {
       <div className="card-value">
         {valueText
           ? valueText
-          : `${prefix || ""}${value}${suffix ? ` ${suffix}` : ""}`}
+          : `${prefix || ""}${value}${
+              suffix ? ` ${suffix}` : ""
+            }`}
       </div>
     </div>
   );
@@ -1599,6 +2043,7 @@ function SummaryPanel({
   nationalIslamic,
   wealthInterest,
   wealthIslamic,
+  housingSupport,
   modeLabel,
   scenarioLabel,
 }) {
@@ -1639,13 +2084,13 @@ function SummaryPanel({
   const zakatFlow = wealthIslamic.zakatShareYear;
 
   const povertyReduction =
-    bottom40Diff * 0.4;
+    bottom40Diff * SOCIAL_ELASTICITIES.povertyPerWealthPoint;
   const crimeReduction =
-    bottom40Diff * 0.25;
+    bottom40Diff * SOCIAL_ELASTICITIES.crimePerWealthPoint;
   const consumptionLift =
-    bottom40Diff * 0.3;
+    bottom40Diff * SOCIAL_ELASTICITIES.consumptionPerWealthPoint;
   const gdpLift =
-    bottom40Diff * 0.15;
+    bottom40Diff * SOCIAL_ELASTICITIES.gdpPerWealthPoint;
 
   return (
     <div className="summary-panel">
@@ -1660,10 +2105,10 @@ function SummaryPanel({
           {housingSaving > 0 ? (
             <>
               For these inputs the Islamic structure changes lifetime
-              housing cash outflow by about £{housingSaving.toLocaleString(
-                "en-GB"
-              )} compared with a conventional mortgage, while
-              reshaping the equity path.
+              housing cash outflow by about £
+              {housingSaving.toLocaleString("en-GB")} compared with a
+              conventional mortgage, while reshaping the equity
+              path.
             </>
           ) : (
             <>
@@ -1671,7 +2116,13 @@ function SummaryPanel({
               structures is similar, but the timing of payments and
               equity build is different.
             </>
-          )}
+          )}{" "}
+          Through zakat, an indicative housing support fund can
+          clear arrears for roughly{" "}
+          {housingSupport.householdsSaved.toFixed(0)} households per
+          year, reducing effective mortgage default rates by around{" "}
+          {housingSupport.defaultReduction.toFixed(2)} percentage
+          points in this simplified setup.
         </li>
         <li>
           <strong>Small businesses:</strong>{" "}
@@ -1681,26 +2132,20 @@ function SummaryPanel({
           change of{" "}
           {smeDiff >= 0
             ? `+${smeDiff.toFixed(1)}`
-            : smeDiff.toFixed(1)}
-          {" "}percentage points for the median SME in this setup.
+            : smeDiff.toFixed(1)}{" "}
+          percentage points for the median SME in this sector.
         </li>
         <li>
           <strong>Macro stability:</strong>{" "}
           The Islamic system improves the GDP stability score by{" "}
-          {econDiff >= 0
-            ? `+${econDiff}`
-            : econDiff}
-          {" "}points and inflation stability by{" "}
-          {inflDiff >= 0
-            ? `+${inflDiff}`
-            : inflDiff}
-          {" "}points in this run, while SME default risk falls by about{" "}
+          {econDiff >= 0 ? `+${econDiff}` : econDiff} points and
+          inflation stability by{" "}
+          {inflDiff >= 0 ? `+${inflDiff}` : inflDiff} points in this
+          run, while SME default risk falls by about{" "}
           {smeDefaultDiff.toFixed(1)} percentage points, average
           unemployment is{" "}
-          {unempDiff >= 0
-            ? `${unempDiff.toFixed(1)}`
-            : `${unempDiff.toFixed(1)}`}{" "}
-          points lower and government borrowing costs are{" "}
+          {unempDiff.toFixed(1)} points lower and government
+          borrowing costs are{" "}
           {borrowDiff.toFixed(1)} percentage points lower in the last
           years of the horizon.
         </li>
@@ -1710,20 +2155,84 @@ function SummaryPanel({
           by about {top20Diff.toFixed(1)} percentage points, the
           bottom 40 percent share rises by{" "}
           {bottom40Diff.toFixed(1)}, and the inequality score
-          improves by {ineqDiff.toFixed(1)} points when you move from
-          interest to Islamic with zakat. Annual zakat flows are on
-          the order of {zakatFlow.toFixed(1)} percent of wealth. If
-          each extra percentage point of wealth held by lower groups
-          reduced poverty by roughly 0.4 percentage points and crime
-          by 0.25, this configuration would imply a poverty drop of
-          about {povertyReduction.toFixed(1)} points, a meaningful
-          reduction in crime risk, and a consumption lift of roughly{" "}
+          improves by {ineqDiff.toFixed(1)} points when you move
+          from interest to Islamic with zakat. Annual zakat flows are
+          on the order of {zakatFlow.toFixed(1)} percent of wealth.
+          If each extra percentage point of wealth held by lower
+          groups reduced poverty by roughly 0.4 percentage points
+          and crime by 0.25, this configuration would imply a
+          poverty drop of about{" "}
+          {povertyReduction.toFixed(1)} points, a crime risk
+          reduction of about {crimeReduction.toFixed(1)} points, and
+          a consumption lift of roughly{" "}
           {consumptionLift.toFixed(1)} percent feeding into a GDP
           uplift of around {gdpLift.toFixed(1)} percent over the long
           run. These social estimates are illustrative, not measured
           elasticities.
         </li>
       </ul>
+    </div>
+  );
+}
+
+/* BANK COMPARISON TABLE */
+
+function BankComparisonTable({ interest, islamic }) {
+  const fmtPct1 = (x) => `${(x * 100).toFixed(1)}%`;
+  const fmtPctNum = (x) => `${x.toFixed(1)}%`;
+
+  return (
+    <div className="card">
+      <div className="card-label">Bank stress summary</div>
+      <table className="bank-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Conventional</th>
+            <th>Islamic</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Capital ratio</td>
+            <td>{fmtPct1(interest.capitalRatio)}</td>
+            <td>{fmtPct1(islamic.capitalRatio)}</td>
+          </tr>
+          <tr>
+            <td>Liquidity ratio</td>
+            <td>{fmtPct1(interest.liquidityRatio)}</td>
+            <td>{fmtPct1(islamic.liquidityRatio)}</td>
+          </tr>
+          <tr>
+            <td>Expected loss / assets</td>
+            <td>{fmtPct1(interest.lossRatio)}</td>
+            <td>{fmtPct1(islamic.lossRatio)}</td>
+          </tr>
+          <tr>
+            <td>Loss cover (equity / loss)</td>
+            <td>
+              {interest.lossCoverRatio > 50
+                ? ">50×"
+                : `${interest.lossCoverRatio.toFixed(1)}×`}
+            </td>
+            <td>
+              {islamic.lossCoverRatio > 50
+                ? ">50×"
+                : `${islamic.lossCoverRatio.toFixed(1)}×`}
+            </td>
+          </tr>
+          <tr>
+            <td>Shortfall probability (stylised)</td>
+            <td>{fmtPctNum(interest.shortfallProb)}</td>
+            <td>{fmtPctNum(islamic.shortfallProb)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="hint small">
+        This is a stylised balance sheet stress test, not a Basel
+        compliant capital model. It highlights relative resilience
+        under different mixes of assets, funding and scenarios.
+      </p>
     </div>
   );
 }
@@ -1920,7 +2429,8 @@ function NationalChart({ interestSeries, islamicSeries }) {
   const height = 100;
   const padX = 5;
   const padY = 5;
-  const lastYear = interestSeries[interestSeries.length - 1].year || 1;
+  const lastYear =
+    interestSeries[interestSeries.length - 1].year || 1;
 
   const scaleX = (year) =>
     padX + ((width - 2 * padX) * year) / lastYear;
@@ -1956,9 +2466,9 @@ function NationalChart({ interestSeries, islamicSeries }) {
         />
       </svg>
       <p className="chart-note">
-        Stylised deterministic model for illustration, not a forecast.
-        UK mode uses average growth and volatility similar to UK
-        history.
+        Stylised deterministic model for illustration, not a
+        forecast. UK mode uses average growth and volatility similar
+        to UK history.
       </p>
     </div>
   );

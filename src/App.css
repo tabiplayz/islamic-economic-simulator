@@ -815,3 +815,241 @@ body {
   font-size: 0.8rem;
   color: #6b7280;
 }
+.intro-banner {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.9rem;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  font-size: 0.85rem;
+}
+
+.chart-svg {
+  width: 100%;
+  height: 140px;
+}
+
+.chart-note {
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: #6b7280;
+}
+
+.chart-row {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .chart-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.methods-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .methods-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.methods-card {
+  background: white;
+  border-radius: 0.9rem;
+  border: 1px solid #e5e7eb;
+  padding: 0.8rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.methods-card.wide {
+  grid-column: 1 / -1;
+}
+
+.methods-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.methods-card ul {
+  padding-left: 1rem;
+  margin: 0;
+  list-style: disc;
+}
+
+.methods-card li {
+  margin-bottom: 0.2rem;
+}
+
+.text.small,
+.hint.small {
+  font-size: 0.8rem;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+  background: #9ca3af;
+}
+
+.legend-item.islamic::before {
+  background: #111827;
+}
+
+.line {
+  stroke-width: 1.4;
+}
+
+.interest-line {
+  stroke: #9ca3af;
+  stroke-dasharray: 3 3;
+}
+
+.islamic-line {
+  stroke: #111827;
+}
+
+.mode-toggle {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #111827;
+  padding: 0.15rem;
+  gap: 0.15rem;
+}
+
+.mode-btn {
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: white;
+  color: #111827;
+}
+
+.top-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.scenario-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+}
+
+.scenario-box select {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: white;
+  font-size: 0.8rem;
+}
+
+.wealth-grid {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .wealth-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.wealth-card .wealth-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  margin-bottom: 0.15rem;
+}
+
+.islamic-tag {
+  background: #111827;
+  color: white;
+}
+
+.summary-panel {
+  border-radius: 0.9rem;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 0.9rem 1rem;
+  font-size: 0.85rem;
+}
+
+.summary-panel h3 {
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+}
+
+.summary-panel ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.summary-panel li {
+  margin-bottom: 0.35rem;
+}
+
+.summary-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.bank-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.bank-table th,
+.bank-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.35rem 0.4rem;
+  text-align: left;
+}
+
+.bank-table th {
+  font-weight: 600;
+}
